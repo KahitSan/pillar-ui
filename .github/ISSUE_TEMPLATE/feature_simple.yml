@@ -1,0 +1,71 @@
+name: Feature Request (Simple)
+description: Request a straightforward new feature or enhancement
+title: ""
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for simple, focused features. For complex architectural changes, use the "Complex Feature" template.
+
+  - type: input
+    id: title-hint
+    attributes:
+      label: Feature Title
+      description: Descriptive title (will be used as issue title)
+      placeholder: "Example: POST /v1/auth/change-password – allow user to set new password and clear temp flag"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-why
+    attributes:
+      label: What & Why
+      description: Background and context for this feature
+      placeholder: |
+        Example: Front-end needs an API call that lets a user replace their temporary password and remove the mustChangePassword flag from metadata.
+
+        Related ticket: https://github.com/KahitSan/repo/issues/123
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Detailed requirements and implementation notes
+      placeholder: |
+        - Protected route – requires Bearer token
+        - Payload: { newPassword: string } (min 8 chars, zod validated)
+        - Steps:
+          1. Validate token → get user id
+          2. Update password via Supabase Admin API
+          3. Clear mustChangePassword flag from user metadata
+        - Returns 200 { success: true }
+        - Error map: 400 (weak password), 401 (invalid token), 500 (Supabase error)
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Numbered checklist of what "done" looks like
+      placeholder: |
+        1. User can log in with temp password, hit endpoint, then log in with new password
+        2. After success the flag is gone from metadata
+        3. Weak password (< 8 chars) returns 400 with clear message
+        4. OpenAPI spec updated
+        5. E2E test covers happy path & weak-password fail
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Notes
+      description: Links to related work, design docs, or other context
+      placeholder: |
+        - Frontend ticket: https://github.com/...
+        - Design doc: [link]
+        - API reference: [link]

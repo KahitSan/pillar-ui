@@ -1,0 +1,118 @@
+name: Feature Request (Complex)
+description: Request a complex feature, refactor, or architectural change
+title: ""
+labels: ["enhancement", "architecture"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for complex features involving architectural changes, refactors, or multi-step implementations.
+
+  - type: input
+    id: title-hint
+    attributes:
+      label: Feature Title
+      description: Descriptive title (will be used as issue title)
+      placeholder: "Example: Restructure codebase: version-first flat layout"
+    validations:
+      required: true
+
+  - type: textarea
+    id: background
+    attributes:
+      label: Background
+      description: Context and motivation for this change
+      placeholder: |
+        Example: Re-organize the Bun+Hono API so every file inside src/modules/ starts with its version (v1.*, v2.*, etc.) and the folder tree is completely flat.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why We Are Doing This
+      description: Detailed rationale with numbered benefits
+      placeholder: |
+        1. **Predictable sorting**: when files are listed alphabetically all V1 code appears together
+        2. **Flat = faster navigation**: no deep paths; every module lives at depth-1
+        3. **Three-layer reuse**: splitting routes/actions/ops lets future V2 endpoints re-use logic
+        4. **LLM-friendly**: flat, version-prefixed structure is easier for code-generation tools
+        5. **n8n-style composability**: by keeping actions & ops version-agnostic we can "wire" old logic into new routes
+    validations:
+      required: true
+
+  - type: textarea
+    id: before-after
+    attributes:
+      label: Before & After (if applicable)
+      description: Visual comparison of current vs proposed state
+      placeholder: |
+        ## BEFORE
+        ```
+        src/
+        ├── routes/
+        │   ├── essential.ts
+        │   ├── v1/
+        │   │   ├── auth.ts
+        │   │   └── members.ts
+        ```
+
+        ## AFTER
+        ```
+        src/
+        ├── index.ts
+        ├── modules/
+        │   ├── v1.auth.ts
+        │   ├── v1.auth.actions.ts
+        │   └── v1.auth.ops.ts
+        ```
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Detailed implementation steps
+      placeholder: |
+        1. Delete src/routes/ and nested folders
+        2. Rename every module file to start with v1.
+        3. Create three-layer modules: *.ts (routes), *.actions.ts, *.ops.ts
+        4. Update tsconfig paths if needed
+        5. README: add "Adding a new endpoint" checklist
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Numbered checklist with verification commands where helpful
+      placeholder: |
+        1. `ls src/modules | grep -v "^v1" | wc -l` returns 0
+        2. `bun run dev` starts and replies 200 on all endpoints
+        3. Zero behavior change: all payloads/status codes identical
+        4. No src/routes/ directory left
+        5. Type-check passes (`bun tsc --noEmit`)
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagrams
+    attributes:
+      label: Diagrams or Flow (optional)
+      description: Mermaid diagrams or ASCII art for complex flows
+      placeholder: |
+        ```mermaid
+        graph TD
+          A[Start] --> B[Step 1]
+          B --> C[Step 2]
+        ```
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Notes
+      description: Cross-references, related PRs, or architectural decisions
+      placeholder: |
+        - Related PR: #123
+        - Previous attempt: [archived link]
+        - Team discussion: cc @KahitSan/contributors

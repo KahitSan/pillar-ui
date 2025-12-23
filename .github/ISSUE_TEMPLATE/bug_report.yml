@@ -1,0 +1,74 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this issue. Please fill out the sections below.
+
+  - type: textarea
+    id: what-why
+    attributes:
+      label: What & Why
+      description: Brief description of the bug and its impact
+      placeholder: |
+        Example: Users cannot log in with temporary passwords after the recent auth update. This blocks admin onboarding workflow.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Steps to Reproduce
+      description: Clear steps to reproduce the issue
+      placeholder: |
+        1. Navigate to login page
+        2. Enter temporary password
+        3. Click login
+        4. Observe error message
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should happen instead?
+      placeholder: User should be redirected to password change modal
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happens?
+      placeholder: 401 error returned, "Invalid credentials" message
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Environment details, screenshots, logs, or any other relevant information
+      placeholder: |
+        - Browser: Chrome 120
+        - OS: macOS 14
+        - API version: v1
+        - Screenshots: [attach here]
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: How do we know this is fixed?
+      placeholder: |
+        1. User can log in with temporary password
+        2. Password change modal appears correctly
+        3. After password change, user can log in with new password
+        4. No console errors
+    validations:
+      required: true

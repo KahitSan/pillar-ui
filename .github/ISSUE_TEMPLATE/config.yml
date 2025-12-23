@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/KahitSan
+    about: Check the organization repositories for documentation and guides
+  - name: Question or Discussion
+    url: https://github.com/orgs/KahitSan/discussions
+    about: For general questions or discussions, use GitHub Discussions
