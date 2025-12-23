@@ -1,0 +1,83 @@
+name: General Issue
+description: Create an issue for bugs, tasks, or feature requests
+title: ""
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for bugs, tasks, or feature requests. Follow the simple structure: What & Why → Scope → Acceptance.
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      description: Select the type of issue
+      options:
+        - bug
+        - task
+        - feature
+    validations:
+      required: true
+
+  - type: input
+    id: title-hint
+    attributes:
+      label: Issue Title
+      description: Descriptive title (will be used as issue title)
+      placeholder: "Example: POST /v1/auth/change-password – allow user to set new password and clear temp flag"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-why
+    attributes:
+      label: What & Why
+      description: Background and context - what needs to be done and why
+      placeholder: |
+        Example: Front-end needs an API call that lets a user replace their temporary password and remove the mustChangePassword flag from metadata.
+
+        Related ticket: https://github.com/KahitSan/repo/issues/123
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Detailed requirements - what exactly needs to be built/fixed
+      placeholder: |
+        - Protected route – requires Bearer token (already logged-in user)
+        - Payload: { newPassword: string } (min 8 chars, zod validated)
+        - Steps:
+          1. Validate token → get user id
+          2. Update password via Supabase Admin API
+          3. Clear mustChangePassword flag from user metadata
+        - Returns 200 { success: true }
+        - Error map: 400 (weak password), 401 (invalid token), 500 (Supabase error)
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance
+      description: Numbered checklist - tick-able, unambiguous criteria for "done"
+      placeholder: |
+        1. User can log in with temp password, hit endpoint, then log in with new password
+        2. After success the flag is gone from metadata
+        3. Weak password (< 8 chars) returns 400 with clear message
+        4. OpenAPI spec updated
+        5. E2E test covers happy path & weak-password fail
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Notes (optional)
+      description: Screenshots, links, code snippets, or other context
+      placeholder: |
+        - Screenshots: [attach here]
+        - Related PRs: #123
+        - Code reference: [link]
