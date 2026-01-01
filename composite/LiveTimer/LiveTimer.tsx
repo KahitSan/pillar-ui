@@ -1,5 +1,9 @@
 import { splitProps, createSignal, onMount, onCleanup, createMemo } from 'solid-js';
-import { Clock, Play, AlertTriangle, Check, Calendar } from 'lucide-solid';
+import Clock from 'lucide-solid/icons/clock';
+import Play from 'lucide-solid/icons/play';
+import AlertTriangle from 'lucide-solid/icons/alert-triangle';
+import Check from 'lucide-solid/icons/check';
+import Calendar from 'lucide-solid/icons/calendar';
 import ProgressBar from '../../base/ProgressBar/ProgressBar';
 
 // @ts-ignore

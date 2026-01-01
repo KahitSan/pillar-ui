@@ -9,7 +9,7 @@ import {
   For,
   Show,
 } from 'solid-js';
-import { X } from 'lucide-solid';
+import X from 'lucide-solid/icons/x';
 
 /* ----------------- types ----------------- */
 type Option = { slug: string; name: string; color?: string };

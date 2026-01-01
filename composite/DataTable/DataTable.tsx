@@ -1,12 +1,10 @@
 import { createSignal, createMemo, createEffect, For, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
-import {
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  ChevronUp
-} from 'lucide-solid';
+import Search from 'lucide-solid/icons/search';
+import ChevronLeft from 'lucide-solid/icons/chevron-left';
+import ChevronRight from 'lucide-solid/icons/chevron-right';
+import ChevronDown from 'lucide-solid/icons/chevron-down';
+import ChevronUp from 'lucide-solid/icons/chevron-up';
 
 // A more specific type for the row data, using a generic
 interface DataTableRow {

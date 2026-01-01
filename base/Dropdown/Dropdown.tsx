@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
 import { createSignal, onCleanup, onMount } from 'solid-js';
-import { ChevronDown } from 'lucide-solid';
+import ChevronDown from 'lucide-solid/icons/chevron-down';
 
 export interface DropdownItemProps {
   id: string;
