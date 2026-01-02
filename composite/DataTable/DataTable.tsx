@@ -63,6 +63,7 @@ interface DataTableProps<T extends DataTableRow> {
   headerButtons?: DataTableHeaderButton[];
   class?: string;
   debounceDelay?: number; // Debounce delay in milliseconds (default: 300ms)
+  headers?: Record<string, string>; // Custom headers for AJAX requests (e.g., Authorization)
 }
 
 // DataTable.net standard server-side parameters interface
@@ -93,6 +94,7 @@ export default function DataTable<T extends DataTableRow>(props: DataTableProps<
   const headerButtons = () => props.headerButtons || [];
   const className = () => props.class || '';
   const debounceDelay = () => props.debounceDelay ?? 300;
+  const customHeaders = () => props.headers || {};
 
   // State with explicit types
   const [searchTerm, setSearchTerm] = createSignal('');
@@ -194,7 +196,13 @@ export default function DataTable<T extends DataTableRow>(props: DataTableProps<
       if (!url) return;
 
       let requestUrl = url;
-      let requestOptions: RequestInit = { method: 'GET', headers: { 'Content-Type': 'application/json' } };
+      let requestOptions: RequestInit = { 
+        method: 'GET', 
+        headers: { 
+          'Content-Type': 'application/json',
+          ...customHeaders()
+        } 
+      };
 
       if (serverSide()) {
         const params = buildServerSideParams();
