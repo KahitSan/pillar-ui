@@ -61,9 +61,9 @@ interface DataTableProps<T extends DataTableRow> {
   lengthMenu?: [number[], (number | string)[]];
 
   headerButtons?: DataTableHeaderButton[];
+  headers?: Record<string, string>; // Custom headers for AJAX requests
   class?: string;
   debounceDelay?: number; // Debounce delay in milliseconds (default: 300ms)
-  headers?: Record<string, string>; // Custom headers for AJAX requests (e.g., Authorization)
 }
 
 // DataTable.net standard server-side parameters interface
