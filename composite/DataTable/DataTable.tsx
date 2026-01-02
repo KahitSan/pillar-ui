@@ -61,6 +61,7 @@ interface DataTableProps<T extends DataTableRow> {
   lengthMenu?: [number[], (number | string)[]];
 
   headerButtons?: DataTableHeaderButton[];
+  headers?: Record<string, string>; // Custom headers for AJAX requests
   class?: string;
   debounceDelay?: number; // Debounce delay in milliseconds (default: 300ms)
 }
@@ -194,7 +195,13 @@ export default function DataTable<T extends DataTableRow>(props: DataTableProps<
       if (!url) return;
 
       let requestUrl = url;
-      let requestOptions: RequestInit = { method: 'GET', headers: { 'Content-Type': 'application/json' } };
+      let requestOptions: RequestInit = { 
+        method: 'GET', 
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(props.headers || {})
+        } 
+      };
 
       if (serverSide()) {
         const params = buildServerSideParams();
