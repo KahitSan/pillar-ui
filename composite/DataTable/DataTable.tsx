@@ -227,7 +227,9 @@ export default function DataTable<T extends DataTableRow>(props: DataTableProps<
       const result = await response.json();
 
       if (serverSide()) {
-        if (result.draw && result.draw !== drawCounter()) return;
+        if (result.draw && result.draw !== drawCounter()) {
+          return;
+        }
 
         setRecordsTotal(result.recordsTotal || 0);
         setRecordsFiltered(result.recordsFiltered || 0);
@@ -256,6 +258,7 @@ export default function DataTable<T extends DataTableRow>(props: DataTableProps<
       setRecordsFiltered(0);
     } finally {
       setLoading(false);
+      setIsDebouncing(false);
     }
   };
 
