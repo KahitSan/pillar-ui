@@ -300,19 +300,15 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
     return `${colorClass()} ${userClasses}`.trim();
   });
 
-  // Access all values once to avoid multiple memo reads
-  const config = staticConfig();
-  const values = dynamicValues();
-  
   return (
     <ProgressBar
-      progress={values.progress}
+      progress={dynamicValues().progress}
       icon={icon()}
-      statusLabel={values.statusLabel}
-      label={config.label}
-      position={config.position}
-      hidePercentage={config.hidePercentage}
-      shimmer={config.shimmer}
+      statusLabel={dynamicValues().statusLabel}
+      label={staticConfig().label}
+      position={staticConfig().position}
+      hidePercentage={staticConfig().hidePercentage}
+      shimmer={staticConfig().shimmer}
       class={finalClass()}
       {...others}
     />
