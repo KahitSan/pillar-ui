@@ -34,7 +34,9 @@ function getGlobalTick(interval: number = 10000): () => number {
     globalTickSignal = currentTick;
     
     globalIntervalId = setInterval(() => {
-      setCurrentTick(Date.now());
+      const now = Date.now();
+      console.log('[LiveTimer] Global tick update:', new Date(now).toLocaleTimeString());
+      setCurrentTick(now);
     }, updateInterval);
   }
   
@@ -200,6 +202,7 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
     const nowSec = Math.floor(currentTick() / 1000);
     const { startSec, endSec } = timestamps();
     const currentScenario = scenario();
+    console.log('[LiveTimer] dynamicValues recomputing, nowSec:', nowSec);
 
     switch (currentScenario) {
       case SCENARIO_COUNTDOWN_TO_START: {
