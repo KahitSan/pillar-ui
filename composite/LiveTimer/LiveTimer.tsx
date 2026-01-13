@@ -1,4 +1,4 @@
-import { splitProps, createSignal, onMount, onCleanup, createMemo } from 'solid-js';
+import { splitProps, createSignal, onCleanup, createMemo } from 'solid-js';
 import Clock from 'lucide-solid/icons/clock';
 import Play from 'lucide-solid/icons/play';
 import AlertTriangle from 'lucide-solid/icons/alert-triangle';
