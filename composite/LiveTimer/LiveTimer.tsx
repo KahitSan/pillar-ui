@@ -127,15 +127,19 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
     };
   });
 
+  // Pre-compute static timestamps in seconds
+  const timestampsSec = createMemo(() => {
+    const { startMs, endMs } = timestamps();
+    return {
+      startSec: Math.floor(startMs / 1000),
+      endSec: endMs ? Math.floor(endMs / 1000) : null
+    };
+  });
+  
   // Determine current scenario and calculate values - optimized calculations
   const timerState = createMemo(() => {
-    const nowMs = currentTick();
-    const { startMs, endMs } = timestamps();
-    
-    // Convert to seconds for calculations
-    const nowSec = Math.floor(nowMs / 1000);
-    const startSec = Math.floor(startMs / 1000);
-    const endSec = endMs ? Math.floor(endMs / 1000) : null;
+    const nowSec = Math.floor(currentTick() / 1000);
+    const { startSec, endSec } = timestampsSec();
 
     // Scenario: Current time <= StartAt (countdown to start)
     if (nowSec <= startSec) {
@@ -241,15 +245,18 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
     return `${state.colorClass} ${userClasses}`.trim();
   });
 
+  // Cache state to avoid multiple memo reads
+  const state = timerState();
+  
   return (
     <ProgressBar
-      progress={timerState().progress}
-      icon={timerState().icon}
-      statusLabel={timerState().statusLabel}
-      label={timerState().label}
-      position={timerState().position}
-      hidePercentage={timerState().hidePercentage}
-      shimmer={timerState().shimmer}
+      progress={state.progress}
+      icon={state.icon}
+      statusLabel={state.statusLabel}
+      label={state.label}
+      position={state.position}
+      hidePercentage={state.hidePercentage}
+      shimmer={state.shimmer}
       class={finalClass()}
       {...others}
     />
