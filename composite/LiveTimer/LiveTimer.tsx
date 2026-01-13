@@ -134,6 +134,13 @@ const SCENARIO_CONFIGS = {
     hidePercentage: false,
     shimmer: false,
   },
+  [SCENARIO_COUNTDOWN_TIMER]: {
+    position: 'left' as const,
+    colorClass: '', // Dynamic - set by colorClass memo
+    label: 'Remaining',
+    hidePercentage: false,
+    shimmer: false,
+  },
 };
 
 // Pre-defined color classes for progress ranges - reuse strings
