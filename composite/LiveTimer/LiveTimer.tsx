@@ -97,6 +97,50 @@ function formatDuration(totalSeconds: number): string {
   return `${minutes}m`;
 }
 
+// Scenario type constants - use numbers for faster comparison
+const SCENARIO_COUNTDOWN_TO_START = 0;
+const SCENARIO_OPEN_TIMER = 1;
+const SCENARIO_OVERDUE = 2;
+const SCENARIO_COMPLETED = 3;
+const SCENARIO_COUNTDOWN_TIMER = 4;
+
+// Pre-defined static scenario configs to avoid object creation
+const SCENARIO_CONFIGS = {
+  [SCENARIO_COUNTDOWN_TO_START]: {
+    position: 'right' as const,
+    colorClass: 'border border-blue-600/60 text-blue-400 hover:border-blue-500',
+    label: 'before start',
+    hidePercentage: false,
+    shimmer: false,
+  },
+  [SCENARIO_OPEN_TIMER]: {
+    position: 'left' as const,
+    colorClass: 'border border-green-600/60 text-green-400 hover:border-green-500',
+    label: 'Open time',
+    hidePercentage: true,
+    shimmer: true,
+  },
+  [SCENARIO_OVERDUE]: {
+    position: 'left' as const,
+    colorClass: 'border border-red-600/60 text-red-400 hover:border-red-500',
+    label: 'Overdue',
+    hidePercentage: false,
+    shimmer: false,
+  },
+  [SCENARIO_COMPLETED]: {
+    position: 'left' as const,
+    colorClass: 'border border-gray-600/60 text-gray-400 hover:border-gray-500',
+    label: 'Completed',
+    hidePercentage: false,
+    shimmer: false,
+  },
+};
+
+// Pre-defined color classes for progress ranges - reuse strings
+const COLOR_GREEN = 'border border-green-600/60 text-green-400 hover:border-green-500';
+const COLOR_AMBER = 'border border-amber-600/60 text-amber-400 hover:border-amber-500';
+const COLOR_RED = 'border border-red-600/60 text-red-400 hover:border-red-500';
+
 // @ts-ignore
 const LiveTimer: Component<LiveTimerProps> = (props) => {
   const [local, others] = splitProps(props, [
@@ -120,120 +164,124 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
       throw new Error('startAt must be a valid Date object or date string');
     }
     
-    // Store as milliseconds for faster math
+    // Store as seconds for faster math (avoid division on every update)
     return {
-      startMs: start.getTime(),
-      endMs: end ? end.getTime() : null
+      startSec: Math.floor(start.getTime() / 1000),
+      endSec: end ? Math.floor(end.getTime() / 1000) : null
     };
   });
 
-  // Pre-compute static timestamps in seconds
-  const timestampsSec = createMemo(() => {
-    const { startMs, endMs } = timestamps();
-    return {
-      startSec: Math.floor(startMs / 1000),
-      endSec: endMs ? Math.floor(endMs / 1000) : null
-    };
-  });
-  
-  // Determine current scenario and calculate values - optimized calculations
-  const timerState = createMemo(() => {
+  // Determine scenario type - separate from computing values
+  // This rarely changes so we cache it separately
+  const scenario = createMemo(() => {
     const nowSec = Math.floor(currentTick() / 1000);
-    const { startSec, endSec } = timestampsSec();
+    const { startSec, endSec } = timestamps();
 
-    // Scenario: Current time <= StartAt (countdown to start)
-    if (nowSec <= startSec) {
-      const remainingSeconds = startSec - nowSec;
-      return {
-        statusLabel: formatTime(remainingSeconds),
-        progress: Math.min(100, (remainingSeconds / 3600) * 100),
-        position: 'right' as const,
-        colorClass: 'border border-blue-600/60 text-blue-400 hover:border-blue-500',
-        label: 'before start',
-        hidePercentage: false,
-        shimmer: false,
-        icon: local.icon || Calendar
-      };
-    }
-
-    // Scenario: Current time >= StartAt AND EndAt is NOT set (open timer)
-    if (endSec === null) {
-      const elapsedSeconds = nowSec - startSec;
-      return {
-        statusLabel: formatTime(elapsedSeconds),
-        progress: 95,
-        position: 'left' as const,
-        colorClass: 'border border-green-600/60 text-green-400 hover:border-green-500',
-        label: 'Open time',
-        hidePercentage: true,
-        shimmer: true,
-        icon: local.icon || Play
-      };
-    }
-
-    // Calculate timing info for scenarios with endAt
-    const totalDuration = endSec - startSec;
+    if (nowSec <= startSec) return SCENARIO_COUNTDOWN_TO_START;
+    if (endSec === null) return SCENARIO_OPEN_TIMER;
+    
     const isCompleted = nowSec >= endSec;
+    if (isCompleted && local.overdue) return SCENARIO_OVERDUE;
+    if (isCompleted) return SCENARIO_COMPLETED;
     
-    // Scenario: Overdue (past endAt with overdue enabled)
-    if (isCompleted && local.overdue) {
-      const overdueSeconds = nowSec - endSec;
-      const overduePercent = totalDuration > 0 ? (overdueSeconds / totalDuration) * 100 : 0;
+    return SCENARIO_COUNTDOWN_TIMER;
+  });
+
+  // Compute only the dynamic values (progress and statusLabel)
+  // This is the hot path - keep it minimal
+  const dynamicValues = createMemo(() => {
+    const nowSec = Math.floor(currentTick() / 1000);
+    const { startSec, endSec } = timestamps();
+    const currentScenario = scenario();
+
+    switch (currentScenario) {
+      case SCENARIO_COUNTDOWN_TO_START: {
+        const remainingSeconds = startSec - nowSec;
+        return {
+          progress: Math.min(100, (remainingSeconds / 3600) * 100),
+          statusLabel: formatTime(remainingSeconds)
+        };
+      }
       
-      return {
-        statusLabel: formatTime(overdueSeconds),
-        progress: 100 + overduePercent,
-        position: 'left' as const,
-        colorClass: 'border border-red-600/60 text-red-400 hover:border-red-500',
-        label: 'Overdue',
-        hidePercentage: false,
-        shimmer: false,
-        icon: local.icon || AlertTriangle
-      };
+      case SCENARIO_OPEN_TIMER: {
+        const elapsedSeconds = nowSec - startSec;
+        return {
+          progress: 95,
+          statusLabel: formatTime(elapsedSeconds)
+        };
+      }
+      
+      case SCENARIO_OVERDUE: {
+        const overdueSeconds = nowSec - endSec!;
+        const totalDuration = endSec! - startSec;
+        const overduePercent = totalDuration > 0 ? (overdueSeconds / totalDuration) * 100 : 0;
+        return {
+          progress: 100 + overduePercent,
+          statusLabel: formatTime(overdueSeconds)
+        };
+      }
+      
+      case SCENARIO_COMPLETED: {
+        const totalDuration = endSec! - startSec;
+        return {
+          progress: 100,
+          statusLabel: formatDuration(totalDuration)
+        };
+      }
+      
+      case SCENARIO_COUNTDOWN_TIMER: {
+        const remainingSeconds = endSec! - nowSec;
+        const totalDuration = endSec! - startSec;
+        const elapsedSeconds = totalDuration - remainingSeconds;
+        const progressPercent = totalDuration > 0 ? (elapsedSeconds / totalDuration) * 100 : 100;
+        
+        return {
+          progress: Math.min(100, progressPercent),
+          statusLabel: formatTime(remainingSeconds)
+        };
+      }
+      
+      default:
+        return { progress: 0, statusLabel: '00:00:00' };
+    }
+  });
+
+  // Get static config for current scenario - reuses pre-defined objects
+  const staticConfig = createMemo(() => {
+    const currentScenario = scenario();
+    return SCENARIO_CONFIGS[currentScenario] || SCENARIO_CONFIGS[SCENARIO_COUNTDOWN_TO_START];
+  });
+
+  // Get icon for current scenario - separate memo to avoid recreation
+  const icon = createMemo(() => {
+    if (local.icon) return local.icon;
+    
+    const currentScenario = scenario();
+    switch (currentScenario) {
+      case SCENARIO_COUNTDOWN_TO_START: return Calendar;
+      case SCENARIO_OPEN_TIMER: return Play;
+      case SCENARIO_OVERDUE: return AlertTriangle;
+      case SCENARIO_COMPLETED: return Check;
+      case SCENARIO_COUNTDOWN_TIMER: return Clock;
+      default: return Clock;
+    }
+  });
+
+  // Compute dynamic color only for countdown timer scenario
+  const colorClass = createMemo(() => {
+    const currentScenario = scenario();
+    
+    if (currentScenario === SCENARIO_COUNTDOWN_TIMER) {
+      const { progress } = dynamicValues();
+      // Use ternary for fast branching - reuse pre-defined strings
+      return progress <= 25 ? COLOR_GREEN : progress <= 75 ? COLOR_AMBER : COLOR_RED;
     }
     
-    // Scenario: Completed (past endAt without overdue)
-    if (isCompleted) {
-      return {
-        statusLabel: formatDuration(totalDuration),
-        progress: 100,
-        position: 'left' as const,
-        colorClass: 'border border-gray-600/60 text-gray-400 hover:border-gray-500',
-        label: 'Completed',
-        hidePercentage: false,
-        shimmer: false,
-        icon: local.icon || Check
-      };
-    }
-
-    // Scenario: Active countdown timer
-    const remainingSeconds = endSec - nowSec;
-    const elapsedSeconds = totalDuration - remainingSeconds;
-    const progressPercent = totalDuration > 0 ? (elapsedSeconds / totalDuration) * 100 : 100;
-
-    // Dynamic color based on progress - use ternary instead of if-else
-    const colorClass =
-      progressPercent <= 25
-        ? 'border border-green-600/60 text-green-400 hover:border-green-500'
-        : progressPercent <= 75
-        ? 'border border-amber-600/60 text-amber-400 hover:border-amber-500'
-        : 'border border-red-600/60 text-red-400 hover:border-red-500';
-
-    return {
-      statusLabel: formatTime(remainingSeconds),
-      progress: Math.min(100, progressPercent),
-      position: 'left' as const,
-      colorClass,
-      label: 'Remaining',
-      hidePercentage: false,
-      shimmer: false,
-      icon: local.icon || Clock
-    };
+    return staticConfig().colorClass;
   });
 
   // Merge user classes with dynamic color classes
   const finalClass = createMemo(() => {
-    const state = timerState();
     const userClasses = local.class || '';
     
     // If user provided border and text colors, use their classes completely
@@ -242,21 +290,22 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
     }
     
     // Merge user classes with dynamic color theme
-    return `${state.colorClass} ${userClasses}`.trim();
+    return `${colorClass()} ${userClasses}`.trim();
   });
 
-  // Cache state to avoid multiple memo reads
-  const state = timerState();
+  // Access all values once to avoid multiple memo reads
+  const config = staticConfig();
+  const values = dynamicValues();
   
   return (
     <ProgressBar
-      progress={state.progress}
-      icon={state.icon}
-      statusLabel={state.statusLabel}
-      label={state.label}
-      position={state.position}
-      hidePercentage={state.hidePercentage}
-      shimmer={state.shimmer}
+      progress={values.progress}
+      icon={icon()}
+      statusLabel={values.statusLabel}
+      label={config.label}
+      position={config.position}
+      hidePercentage={config.hidePercentage}
+      shimmer={config.shimmer}
       class={finalClass()}
       {...others}
     />
