@@ -12,7 +12,6 @@ export interface LiveTimerProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>,
   startAt: Date; // Required start date/time
   endAt?: Date; // Optional end date/time
   overdue?: boolean; // Allow counting past endAt
-  updateInterval?: number; // Update frequency in milliseconds (default: 10000 = 10 seconds)
   
   // @ts-ignore Display options
   icon?: Component<{ size: number; class?: string }>; // Custom icon override
@@ -21,36 +20,62 @@ export interface LiveTimerProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>,
   class?: string; // Custom classes for the ProgressBar
 }
 
-// Centralized ticker - updates every 10 seconds by default to reduce overhead
-let globalTickSignal: (() => number) | null = null;
-let globalIntervalId: number | undefined | any = null;
-let subscriberCount = 0;
-let updateInterval = 10000; // Default 10 seconds
+// Fast ticker for time display - updates every 1 second (lightweight)
+let fastTickSignal: (() => number) | null = null;
+let fastIntervalId: number | undefined | any = null;
+let fastSubscriberCount = 0;
 
-function getGlobalTick(interval: number = 10000): () => number {
-  if (!globalTickSignal) {
-    updateInterval = interval;
+function getFastTick(): () => number {
+  if (!fastTickSignal) {
     const [currentTick, setCurrentTick] = createSignal(Date.now());
-    globalTickSignal = currentTick;
+    fastTickSignal = currentTick;
     
-    globalIntervalId = setInterval(() => {
+    fastIntervalId = setInterval(() => {
       setCurrentTick(Date.now());
-    }, updateInterval);
+    }, 1000); // 1 second for smooth time display
   }
   
-  subscriberCount++;
+  fastSubscriberCount++;
   
-  // Cleanup when last subscriber unmounts
   onCleanup(() => {
-    subscriberCount--;
-    if (subscriberCount === 0 && globalIntervalId) {
-      clearInterval(globalIntervalId);
-      globalIntervalId = null;
-      globalTickSignal = null;
+    fastSubscriberCount--;
+    if (fastSubscriberCount === 0 && fastIntervalId) {
+      clearInterval(fastIntervalId);
+      fastIntervalId = null;
+      fastTickSignal = null;
     }
   });
   
-  return globalTickSignal;
+  return fastTickSignal;
+}
+
+// Slow ticker for heavy calculations - updates every 10 seconds (performance)
+let slowTickSignal: (() => number) | null = null;
+let slowIntervalId: number | undefined | any = null;
+let slowSubscriberCount = 0;
+
+function getSlowTick(): () => number {
+  if (!slowTickSignal) {
+    const [currentTick, setCurrentTick] = createSignal(Date.now());
+    slowTickSignal = currentTick;
+    
+    slowIntervalId = setInterval(() => {
+      setCurrentTick(Date.now());
+    }, 10000); // 10 seconds for heavy calculations
+  }
+  
+  slowSubscriberCount++;
+  
+  onCleanup(() => {
+    slowSubscriberCount--;
+    if (slowSubscriberCount === 0 && slowIntervalId) {
+      clearInterval(slowIntervalId);
+      slowIntervalId = null;
+      slowTickSignal = null;
+    }
+  });
+  
+  return slowTickSignal;
 }
 
 // Utility to safely convert to Date object
@@ -156,11 +181,13 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
     'overdue',
     'icon',
     'class',
-    'updateInterval'
   ]);
 
-  // Use shared global tick with configurable interval
-  const currentTick = getGlobalTick(local.updateInterval || 10000);
+  // Use fast tick for time display (1 second - lightweight)
+  const fastTick = getFastTick();
+  
+  // Use slow tick for heavy calculations (10 seconds - performance)
+  const slowTick = getSlowTick();
   
   // Pre-compute timestamps once - only recompute when props change
   const timestamps = createMemo(() => {
@@ -178,10 +205,9 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
     };
   });
 
-  // Determine scenario type - separate from computing values
-  // This rarely changes so we cache it separately
+  // Determine scenario type - uses slow tick (only needs to update every 10s)
   const scenario = createMemo(() => {
-    const nowSec = Math.floor(currentTick() / 1000);
+    const nowSec = Math.floor(slowTick() / 1000);
     const { startSec, endSec } = timestamps();
 
     if (nowSec <= startSec) return SCENARIO_COUNTDOWN_TO_START;
@@ -194,62 +220,78 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
     return SCENARIO_COUNTDOWN_TIMER;
   });
 
-  // Compute only the dynamic values (progress and statusLabel)
-  // This is the hot path - keep it minimal
-  const dynamicValues = createMemo(() => {
-    const nowSec = Math.floor(currentTick() / 1000);
+  // Compute progress - uses slow tick (heavy calculation, every 10s)
+  const progress = createMemo(() => {
+    const nowSec = Math.floor(slowTick() / 1000);
     const { startSec, endSec } = timestamps();
     const currentScenario = scenario();
 
     switch (currentScenario) {
       case SCENARIO_COUNTDOWN_TO_START: {
         const remainingSeconds = startSec - nowSec;
-        return {
-          progress: Math.min(100, (remainingSeconds / 3600) * 100),
-          statusLabel: formatTime(remainingSeconds)
-        };
+        return Math.min(100, (remainingSeconds / 3600) * 100);
       }
       
-      case SCENARIO_OPEN_TIMER: {
-        const elapsedSeconds = nowSec - startSec;
-        return {
-          progress: 95,
-          statusLabel: formatTime(elapsedSeconds)
-        };
-      }
+      case SCENARIO_OPEN_TIMER:
+        return 95;
       
       case SCENARIO_OVERDUE: {
         const overdueSeconds = nowSec - endSec!;
         const totalDuration = endSec! - startSec;
         const overduePercent = totalDuration > 0 ? (overdueSeconds / totalDuration) * 100 : 0;
-        return {
-          progress: 100 + overduePercent,
-          statusLabel: formatTime(overdueSeconds)
-        };
+        return 100 + overduePercent;
       }
       
-      case SCENARIO_COMPLETED: {
-        const totalDuration = endSec! - startSec;
-        return {
-          progress: 100,
-          statusLabel: formatDuration(totalDuration)
-        };
-      }
+      case SCENARIO_COMPLETED:
+        return 100;
       
       case SCENARIO_COUNTDOWN_TIMER: {
         const remainingSeconds = endSec! - nowSec;
         const totalDuration = endSec! - startSec;
         const elapsedSeconds = totalDuration - remainingSeconds;
         const progressPercent = totalDuration > 0 ? (elapsedSeconds / totalDuration) * 100 : 100;
-        
-        return {
-          progress: Math.min(100, progressPercent),
-          statusLabel: formatTime(remainingSeconds)
-        };
+        return Math.min(100, progressPercent);
       }
       
       default:
-        return { progress: 0, statusLabel: '00:00:00' };
+        return 0;
+    }
+  });
+
+  // Compute statusLabel - uses fast tick (lightweight, every 1s for smooth display)
+  const statusLabel = createMemo(() => {
+    const nowSec = Math.floor(fastTick() / 1000);
+    const { startSec, endSec } = timestamps();
+    const currentScenario = scenario();
+
+    switch (currentScenario) {
+      case SCENARIO_COUNTDOWN_TO_START: {
+        const remainingSeconds = startSec - nowSec;
+        return formatTime(remainingSeconds);
+      }
+      
+      case SCENARIO_OPEN_TIMER: {
+        const elapsedSeconds = nowSec - startSec;
+        return formatTime(elapsedSeconds);
+      }
+      
+      case SCENARIO_OVERDUE: {
+        const overdueSeconds = nowSec - endSec!;
+        return formatTime(overdueSeconds);
+      }
+      
+      case SCENARIO_COMPLETED: {
+        const totalDuration = endSec! - startSec;
+        return formatDuration(totalDuration);
+      }
+      
+      case SCENARIO_COUNTDOWN_TIMER: {
+        const remainingSeconds = endSec! - nowSec;
+        return formatTime(remainingSeconds);
+      }
+      
+      default:
+        return '00:00:00';
     }
   });
 
@@ -279,9 +321,9 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
     const currentScenario = scenario();
     
     if (currentScenario === SCENARIO_COUNTDOWN_TIMER) {
-      const { progress } = dynamicValues();
+      const progressValue = progress();
       // Use ternary for fast branching - reuse pre-defined strings
-      return progress <= 25 ? COLOR_GREEN : progress <= 75 ? COLOR_AMBER : COLOR_RED;
+      return progressValue <= 25 ? COLOR_GREEN : progressValue <= 75 ? COLOR_AMBER : COLOR_RED;
     }
     
     return staticConfig().colorClass;
@@ -302,9 +344,9 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
 
   return (
     <ProgressBar
-      progress={dynamicValues().progress}
+      progress={progress()}
       icon={icon()}
-      statusLabel={dynamicValues().statusLabel}
+      statusLabel={statusLabel()}
       label={staticConfig().label}
       position={staticConfig().position}
       hidePercentage={staticConfig().hidePercentage}
