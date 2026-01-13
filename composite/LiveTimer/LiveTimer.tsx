@@ -20,6 +20,37 @@ export interface LiveTimerProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>,
   class?: string; // Custom classes for the ProgressBar
 }
 
+// Centralized time source - all timers share a single interval
+// This reduces N intervals to 1 interval when rendering N timers
+let globalTimeSignal: (() => Date) | null = null;
+let globalIntervalId: number | undefined | any = null;
+let subscriberCount = 0;
+
+function getGlobalTime(): () => Date {
+  if (!globalTimeSignal) {
+    const [currentTime, setCurrentTime] = createSignal(new Date());
+    globalTimeSignal = currentTime;
+    
+    globalIntervalId = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+  }
+  
+  subscriberCount++;
+  
+  // Cleanup when last subscriber unmounts
+  onCleanup(() => {
+    subscriberCount--;
+    if (subscriberCount === 0 && globalIntervalId) {
+      clearInterval(globalIntervalId);
+      globalIntervalId = null;
+      globalTimeSignal = null;
+    }
+  });
+  
+  return globalTimeSignal;
+}
+
 // Utility to safely convert to Date object
 function ensureDate(value: any): Date | undefined {
   if (!value) return undefined;
@@ -78,32 +109,27 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
     'class'
   ]);
 
-  const [currentTime, setCurrentTime] = createSignal(new Date());
-  let intervalId: number | undefined | any;
-
-  // Update current time every second
-  onMount(() => {
-    intervalId = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-  });
-
-  onCleanup(() => {
-    if (intervalId) clearInterval(intervalId);
+  // Use shared global time source instead of creating individual intervals
+  const currentTime = getGlobalTime();
+  
+  // Memoize date conversions - only recompute when props change
+  const dates = createMemo(() => {
+    const start = ensureDate(local.startAt);
+    const end = ensureDate(local.endAt);
+    
+    if (!start) {
+      throw new Error('startAt must be a valid Date object or date string');
+    }
+    
+    return { start, end };
   });
 
   // Determine current scenario and calculate values
   const timerState = createMemo(() => {
     const now = currentTime();
     
-    // Safely convert props to Date objects
-    const start = ensureDate(local.startAt);
-    const end = ensureDate(local.endAt);
-
-    // Ensure start is a valid Date
-    if (!start) {
-      throw new Error('startAt must be a valid Date object or date string');
-    }
+    // Use pre-converted dates from memoized conversion
+    const { start, end } = dates();
 
     // Scenario: Current time <= StartAt (countdown to start)
     if (now <= start) {
