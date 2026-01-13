@@ -12,6 +12,7 @@ export interface LiveTimerProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>,
   startAt: Date; // Required start date/time
   endAt?: Date; // Optional end date/time
   overdue?: boolean; // Allow counting past endAt
+  updateInterval?: number; // Update frequency in milliseconds (default: 10000 = 10 seconds)
   
   // @ts-ignore Display options
   icon?: Component<{ size: number; class?: string }>; // Custom icon override
@@ -20,20 +21,21 @@ export interface LiveTimerProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>,
   class?: string; // Custom classes for the ProgressBar
 }
 
-// Centralized time source - all timers share a single interval
-// This reduces N intervals to 1 interval when rendering N timers
-let globalTimeSignal: (() => Date) | null = null;
+// Centralized ticker - updates every 10 seconds by default to reduce overhead
+let globalTickSignal: (() => number) | null = null;
 let globalIntervalId: number | undefined | any = null;
 let subscriberCount = 0;
+let updateInterval = 10000; // Default 10 seconds
 
-function getGlobalTime(): () => Date {
-  if (!globalTimeSignal) {
-    const [currentTime, setCurrentTime] = createSignal(new Date());
-    globalTimeSignal = currentTime;
+function getGlobalTick(interval: number = 10000): () => number {
+  if (!globalTickSignal) {
+    updateInterval = interval;
+    const [currentTick, setCurrentTick] = createSignal(Date.now());
+    globalTickSignal = currentTick;
     
     globalIntervalId = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+      setCurrentTick(Date.now());
+    }, updateInterval);
   }
   
   subscriberCount++;
@@ -44,11 +46,11 @@ function getGlobalTime(): () => Date {
     if (subscriberCount === 0 && globalIntervalId) {
       clearInterval(globalIntervalId);
       globalIntervalId = null;
-      globalTimeSignal = null;
+      globalTickSignal = null;
     }
   });
   
-  return globalTimeSignal;
+  return globalTickSignal;
 }
 
 // Utility to safely convert to Date object
@@ -69,13 +71,19 @@ function ensureDate(value: any): Date | undefined {
   }
 }
 
-// Utility to format time as HH:MM:SS
+// Optimized formatting - uses lookup for padding
+const padZero = ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09'];
+function pad2(n: number): string {
+  return n < 10 ? padZero[n] : String(n);
+}
+
+// Utility to format time as HH:MM:SS - optimized
 function formatTime(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = Math.floor(totalSeconds % 60);
   
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`;
 }
 
 // Utility to format duration as human readable
@@ -89,16 +97,6 @@ function formatDuration(totalSeconds: number): string {
   return `${minutes}m`;
 }
 
-// Utility to get time difference in seconds
-function getTimeDifference(from: Date, to: Date): number {
-  return Math.max(0, Math.floor((to.getTime() - from.getTime()) / 1000));
-}
-
-// Utility to get elapsed time in seconds
-function getElapsedTime(from: Date, to: Date): number {
-  return Math.max(0, Math.floor((to.getTime() - from.getTime()) / 1000));
-}
-
 // @ts-ignore
 const LiveTimer: Component<LiveTimerProps> = (props) => {
   const [local, others] = splitProps(props, [
@@ -106,14 +104,15 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
     'endAt', 
     'overdue',
     'icon',
-    'class'
+    'class',
+    'updateInterval'
   ]);
 
-  // Use shared global time source instead of creating individual intervals
-  const currentTime = getGlobalTime();
+  // Use shared global tick with configurable interval
+  const currentTick = getGlobalTick(local.updateInterval || 10000);
   
-  // Memoize date conversions - only recompute when props change
-  const dates = createMemo(() => {
+  // Pre-compute timestamps once - only recompute when props change
+  const timestamps = createMemo(() => {
     const start = ensureDate(local.startAt);
     const end = ensureDate(local.endAt);
     
@@ -121,24 +120,30 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
       throw new Error('startAt must be a valid Date object or date string');
     }
     
-    return { start, end };
+    // Store as milliseconds for faster math
+    return {
+      startMs: start.getTime(),
+      endMs: end ? end.getTime() : null
+    };
   });
 
-  // Determine current scenario and calculate values
+  // Determine current scenario and calculate values - optimized calculations
   const timerState = createMemo(() => {
-    const now = currentTime();
+    const nowMs = currentTick();
+    const { startMs, endMs } = timestamps();
     
-    // Use pre-converted dates from memoized conversion
-    const { start, end } = dates();
+    // Convert to seconds for calculations
+    const nowSec = Math.floor(nowMs / 1000);
+    const startSec = Math.floor(startMs / 1000);
+    const endSec = endMs ? Math.floor(endMs / 1000) : null;
 
     // Scenario: Current time <= StartAt (countdown to start)
-    if (now <= start) {
-      const remainingSeconds = getTimeDifference(now, start);
+    if (nowSec <= startSec) {
+      const remainingSeconds = startSec - nowSec;
       return {
-        scenario: 'countdown-to-start' as const,
-        statusLabel: formatTime(remainingSeconds), // HH:MM:SS always in statusLabel
-        progress: Math.min(100, (remainingSeconds / 3600) * 100), // Cap at 100%
-        position: 'right' as const, // Fixed: position right for countdown
+        statusLabel: formatTime(remainingSeconds),
+        progress: Math.min(100, (remainingSeconds / 3600) * 100),
+        position: 'right' as const,
         colorClass: 'border border-blue-600/60 text-blue-400 hover:border-blue-500',
         label: 'before start',
         hidePercentage: false,
@@ -148,11 +153,10 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
     }
 
     // Scenario: Current time >= StartAt AND EndAt is NOT set (open timer)
-    if (!end) {
-      const elapsedSeconds = getElapsedTime(start, now);
+    if (endSec === null) {
+      const elapsedSeconds = nowSec - startSec;
       return {
-        scenario: 'open-timer' as const,
-        statusLabel: formatTime(elapsedSeconds), // HH:MM:SS in statusLabel
+        statusLabel: formatTime(elapsedSeconds),
         progress: 95,
         position: 'left' as const,
         colorClass: 'border border-green-600/60 text-green-400 hover:border-green-500',
@@ -163,19 +167,18 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
       };
     }
 
-    // Calculate timing info for scenarios with endAt (end is guaranteed to be a Date here)
-    const totalDuration = getTimeDifference(start, end);
-    const isCompleted = now >= end;
+    // Calculate timing info for scenarios with endAt
+    const totalDuration = endSec - startSec;
+    const isCompleted = nowSec >= endSec;
     
     // Scenario: Overdue (past endAt with overdue enabled)
     if (isCompleted && local.overdue) {
-      const overdueSeconds = getElapsedTime(end, now);
+      const overdueSeconds = nowSec - endSec;
       const overduePercent = totalDuration > 0 ? (overdueSeconds / totalDuration) * 100 : 0;
       
       return {
-        scenario: 'overdue' as const,
-        statusLabel: formatTime(overdueSeconds), // HH:MM:SS of overdue time
-        progress: 100 + overduePercent, // 100+ for overflow
+        statusLabel: formatTime(overdueSeconds),
+        progress: 100 + overduePercent,
         position: 'left' as const,
         colorClass: 'border border-red-600/60 text-red-400 hover:border-red-500',
         label: 'Overdue',
@@ -188,8 +191,7 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
     // Scenario: Completed (past endAt without overdue)
     if (isCompleted) {
       return {
-        scenario: 'completed' as const,
-        statusLabel: formatDuration(totalDuration), // Duration consumed, not HH:MM:SS
+        statusLabel: formatDuration(totalDuration),
         progress: 100,
         position: 'left' as const,
         colorClass: 'border border-gray-600/60 text-gray-400 hover:border-gray-500',
@@ -201,26 +203,20 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
     }
 
     // Scenario: Active countdown timer
-    const remainingSeconds = getTimeDifference(now, end);
+    const remainingSeconds = endSec - nowSec;
     const elapsedSeconds = totalDuration - remainingSeconds;
     const progressPercent = totalDuration > 0 ? (elapsedSeconds / totalDuration) * 100 : 100;
 
-    // Dynamic color based on progress
-    let colorClass: string;
-    if (progressPercent <= 25) {
-      // Just started - Green
-      colorClass = 'border border-green-600/60 text-green-400 hover:border-green-500';
-    } else if (progressPercent <= 75) {
-      // In progress - Amber
-      colorClass = 'border border-amber-600/60 text-amber-400 hover:border-amber-500';
-    } else {
-      // Almost finished - Red
-      colorClass = 'border border-red-600/60 text-red-400 hover:border-red-500';
-    }
+    // Dynamic color based on progress - use ternary instead of if-else
+    const colorClass =
+      progressPercent <= 25
+        ? 'border border-green-600/60 text-green-400 hover:border-green-500'
+        : progressPercent <= 75
+        ? 'border border-amber-600/60 text-amber-400 hover:border-amber-500'
+        : 'border border-red-600/60 text-red-400 hover:border-red-500';
 
     return {
-      scenario: 'countdown-timer' as const,
-      statusLabel: formatTime(remainingSeconds), // HH:MM:SS in statusLabel
+      statusLabel: formatTime(remainingSeconds),
       progress: Math.min(100, progressPercent),
       position: 'left' as const,
       colorClass,
