@@ -20,7 +20,70 @@ export interface LiveTimerProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>,
   class?: string; // Custom classes for the ProgressBar
 }
 
-// Fast ticker for time display - updates every 1 second (lightweight)
+// Dynamic ticker for time display - switches between 1s and 5min based on time remaining
+let dynamicTickSignal: (() => number) | null = null;
+let dynamicIntervalId: number | undefined | any = null;
+let dynamicSubscriberCount = 0;
+let currentInterval = 1000;
+
+function getDynamicTick(startSec: number, endSec: number | null, overdue: boolean): () => number {
+  if (!dynamicTickSignal) {
+    const [currentTick, setCurrentTick] = createSignal(Date.now());
+    dynamicTickSignal = currentTick;
+    
+    const updateInterval = () => {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const HOURS_24 = 24 * 3600;
+      let newInterval = 1000;
+      
+      // Check if time remaining is > 24 hours in any scenario
+      if (nowSec <= startSec) {
+        // Countdown to start
+        const remainingSeconds = startSec - nowSec;
+        newInterval = remainingSeconds > HOURS_24 ? 300000 : 1000; // 5 min or 1 sec
+      } else if (endSec !== null && nowSec < endSec) {
+        // Countdown timer
+        const remainingSeconds = endSec - nowSec;
+        newInterval = remainingSeconds > HOURS_24 ? 300000 : 1000;
+      } else if (endSec !== null && nowSec >= endSec && overdue) {
+        // Overdue
+        const overdueSeconds = nowSec - endSec;
+        newInterval = overdueSeconds > HOURS_24 ? 300000 : 1000;
+      }
+      
+      // Only restart if interval changed
+      if (newInterval !== currentInterval) {
+        currentInterval = newInterval;
+        if (dynamicIntervalId) clearInterval(dynamicIntervalId);
+        dynamicIntervalId = setInterval(() => {
+          setCurrentTick(Date.now());
+          updateInterval();
+        }, currentInterval);
+      }
+    };
+    
+    dynamicIntervalId = setInterval(() => {
+      setCurrentTick(Date.now());
+      updateInterval();
+    }, currentInterval);
+  }
+  
+  dynamicSubscriberCount++;
+  
+  onCleanup(() => {
+    dynamicSubscriberCount--;
+    if (dynamicSubscriberCount === 0 && dynamicIntervalId) {
+      clearInterval(dynamicIntervalId);
+      dynamicIntervalId = null;
+      dynamicTickSignal = null;
+      currentInterval = 1000;
+    }
+  });
+  
+  return dynamicTickSignal;
+}
+
+// Fast ticker for time display - updates every 1 second (lightweight) - KEPT FOR BACKWARD COMPATIBILITY
 let fastTickSignal: (() => number) | null = null;
 let fastIntervalId: number | undefined | any = null;
 let fastSubscriberCount = 0;
@@ -111,6 +174,22 @@ function formatTime(totalSeconds: number): string {
   return `${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`;
 }
 
+// Utility to format time with days support (no seconds/minutes when > 24h)
+function formatTimeWithDays(totalSeconds: number): string {
+  const HOURS_24 = 24 * 3600;
+  
+  if (totalSeconds > HOURS_24) {
+    // Show days format: Xd Yh (no minutes or seconds)
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    
+    return `${days}d ${hours}h`;
+  }
+  
+  // Show HH:MM:SS for times under 24 hours
+  return formatTime(totalSeconds);
+}
+
 // Utility to format duration as human readable
 function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
@@ -134,8 +213,8 @@ const SCENARIO_CONFIGS = {
   [SCENARIO_COUNTDOWN_TO_START]: {
     position: 'right' as const,
     colorClass: 'border border-blue-600/60 text-blue-400 hover:border-blue-500',
-    label: 'before start',
-    hidePercentage: false,
+    label: undefined, // Hide label for bookings
+    hidePercentage: true, // Hide percentage for bookings
     shimmer: false,
   },
   [SCENARIO_OPEN_TIMER]: {
@@ -183,12 +262,6 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
     'class',
   ]);
 
-  // Use fast tick for time display (1 second - lightweight)
-  const fastTick = getFastTick();
-  
-  // Use slow tick for heavy calculations (10 seconds - performance)
-  const slowTick = getSlowTick();
-  
   // Pre-compute timestamps once - only recompute when props change
   const timestamps = createMemo(() => {
     const start = ensureDate(local.startAt);
@@ -204,6 +277,13 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
       endSec: end ? Math.floor(end.getTime() / 1000) : null
     };
   });
+
+  // Use dynamic tick for time display (switches between 5min and 1s based on time remaining)
+  const { startSec, endSec } = timestamps();
+  const dynamicTick = getDynamicTick(startSec, endSec, local.overdue ?? false);
+  
+  // Use slow tick for heavy calculations (10 seconds - performance)
+  const slowTick = getSlowTick();
 
   // Determine scenario type - uses slow tick (only needs to update every 10s)
   const scenario = createMemo(() => {
@@ -258,26 +338,26 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
     }
   });
 
-  // Compute statusLabel - uses fast tick (lightweight, every 1s for smooth display)
+  // Compute statusLabel - uses dynamic tick (switches between 5min and 1s based on time)
   const statusLabel = createMemo(() => {
-    const nowSec = Math.floor(fastTick() / 1000);
+    const nowSec = Math.floor(dynamicTick() / 1000);
     const { startSec, endSec } = timestamps();
     const currentScenario = scenario();
 
     switch (currentScenario) {
       case SCENARIO_COUNTDOWN_TO_START: {
         const remainingSeconds = startSec - nowSec;
-        return formatTime(remainingSeconds);
+        return formatTimeWithDays(remainingSeconds);
       }
       
       case SCENARIO_OPEN_TIMER: {
         const elapsedSeconds = nowSec - startSec;
-        return formatTime(elapsedSeconds);
+        return formatTimeWithDays(elapsedSeconds);
       }
       
       case SCENARIO_OVERDUE: {
         const overdueSeconds = nowSec - endSec!;
-        return formatTime(overdueSeconds);
+        return formatTimeWithDays(overdueSeconds);
       }
       
       case SCENARIO_COMPLETED: {
@@ -287,7 +367,7 @@ const LiveTimer: Component<LiveTimerProps> = (props) => {
       
       case SCENARIO_COUNTDOWN_TIMER: {
         const remainingSeconds = endSec! - nowSec;
-        return formatTime(remainingSeconds);
+        return formatTimeWithDays(remainingSeconds);
       }
       
       default:
