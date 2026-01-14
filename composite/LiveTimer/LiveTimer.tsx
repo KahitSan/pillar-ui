@@ -83,35 +83,6 @@ function getDynamicTick(startSec: number, endSec: number | null, overdue: boolea
   return dynamicTickSignal;
 }
 
-// Fast ticker for time display - updates every 1 second (lightweight) - KEPT FOR BACKWARD COMPATIBILITY
-let fastTickSignal: (() => number) | null = null;
-let fastIntervalId: number | undefined | any = null;
-let fastSubscriberCount = 0;
-
-function getFastTick(): () => number {
-  if (!fastTickSignal) {
-    const [currentTick, setCurrentTick] = createSignal(Date.now());
-    fastTickSignal = currentTick;
-    
-    fastIntervalId = setInterval(() => {
-      setCurrentTick(Date.now());
-    }, 1000); // 1 second for smooth time display
-  }
-  
-  fastSubscriberCount++;
-  
-  onCleanup(() => {
-    fastSubscriberCount--;
-    if (fastSubscriberCount === 0 && fastIntervalId) {
-      clearInterval(fastIntervalId);
-      fastIntervalId = null;
-      fastTickSignal = null;
-    }
-  });
-  
-  return fastTickSignal;
-}
-
 // Slow ticker for heavy calculations - updates every 10 seconds (performance)
 let slowTickSignal: (() => number) | null = null;
 let slowIntervalId: number | undefined | any = null;
