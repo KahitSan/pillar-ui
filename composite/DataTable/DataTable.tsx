@@ -1,5 +1,6 @@
 import { createSignal, createMemo, createEffect, For, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
+import axios from 'axios';
 import Search from 'lucide-solid/icons/search';
 import ChevronLeft from 'lucide-solid/icons/chevron-left';
 import ChevronRight from 'lucide-solid/icons/chevron-right';
@@ -195,36 +196,24 @@ export default function DataTable<T extends DataTableRow>(props: DataTableProps<
       const url = typeof ajaxConfig === 'string' ? ajaxConfig : ajaxConfig.url;
       if (!url) return;
 
-      let requestUrl = url;
-      let requestOptions: RequestInit = { 
-        method: 'GET', 
-        headers: { 
-          'Content-Type': 'application/json',
-          ...customHeaders()
-        } 
+      const requestHeaders = {
+        'Content-Type': 'application/json',
+        ...customHeaders()
       };
 
+      let params: Record<string, any> = {};
       if (serverSide()) {
-        const params = buildServerSideParams();
-        const urlParams = new URLSearchParams();
-        Object.entries(params).forEach(([key, value]) => {
-          if (value !== undefined && value !== null) {
-            urlParams.append(key, String(value));
-          }
-        });
-        requestUrl = `${url}?${urlParams.toString()}`;
+        params = buildServerSideParams();
       }
 
-      console.log('DataTable request URL:', requestUrl);
+      console.log('DataTable request URL:', url, 'params:', params);
 
-      const response = await fetch(requestUrl, requestOptions);
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('DataTable fetch error:', response.status, response.statusText, errorText);
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      const response = await axios.get(url, {
+        headers: requestHeaders,
+        params,
+      });
 
-      const result = await response.json();
+      const result = response.data;
 
       if (serverSide()) {
         if (result.draw && result.draw !== drawCounter()) {
@@ -251,8 +240,9 @@ export default function DataTable<T extends DataTableRow>(props: DataTableProps<
         setRecordsFiltered(processedData.length);
       }
 
-    } catch (error) {
-      console.error('DataTable: Failed to load AJAX data:', error);
+    } catch (error: any) {
+      const errorMessage = error.response?.data || error.message || 'Unknown error';
+      console.error('DataTable: Failed to load AJAX data:', error.response?.status, errorMessage);
       setTableData([]);
       setRecordsTotal(0);
       setRecordsFiltered(0);

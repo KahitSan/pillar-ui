@@ -1,3 +1,5 @@
+import axios, { type AxiosInstance } from 'axios';
+
 // API response interface
 export interface APIResponse<T = any> {
   data: T[];
@@ -7,65 +9,35 @@ export interface APIResponse<T = any> {
 }
 
 export class DataTableAPI {
-  private baseURL: string;
+  private client: AxiosInstance;
 
   constructor(baseURL: string = 'http://localhost:3000') {
-    this.baseURL = baseURL;
+    this.client = axios.create({
+      baseURL,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
   }
 
   async fetchData(params: Record<string, any> = {}): Promise<APIResponse> {
-    const queryString = new URLSearchParams(params).toString();
-    const response = await fetch(`${this.baseURL}/api/members?${queryString}`);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    return await response.json();
+    const response = await this.client.get('/api/members', { params });
+    return response.data;
   }
 
   async addMember(memberData: any): Promise<any> {
-    const response = await fetch(`${this.baseURL}/api/members`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(memberData),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    return await response.json();
+    const response = await this.client.post('/api/members', memberData);
+    return response.data;
   }
 
   async updateMember(id: string | number, memberData: any): Promise<any> {
-    const response = await fetch(`${this.baseURL}/api/members/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(memberData),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    return await response.json();
+    const response = await this.client.put(`/api/members/${id}`, memberData);
+    return response.data;
   }
 
   async deleteMember(id: string | number): Promise<any> {
-    const response = await fetch(`${this.baseURL}/api/members/${id}`, {
-      method: 'DELETE',
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    return await response.json();
+    const response = await this.client.delete(`/api/members/${id}`);
+    return response.data;
   }
 
   async importCSV(csvData: any, mappings: Record<string, string>): Promise<any> {
@@ -73,22 +45,18 @@ export class DataTableAPI {
     formData.append('csvFile', csvData.file);
     formData.append('mappings', JSON.stringify(mappings));
 
-    const response = await fetch(`${this.baseURL}/api/members/import`, {
-      method: 'POST',
-      body: formData,
+    const response = await this.client.post('/api/members/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
     });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    return await response.json();
+    return response.data;
   }
 
   // Setup Server-Sent Events for real-time updates
   setupSSE(onUpdate: (data: any) => void): EventSource {
-    const eventSource = new EventSource(`${this.baseURL}/api/members/events`);
-    
+    const eventSource = new EventSource(`${this.client.defaults.baseURL}/api/members/events`);
+
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
       onUpdate(data);
