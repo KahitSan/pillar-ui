@@ -183,28 +183,28 @@ const SCENARIO_COUNTDOWN_TIMER = 4;
 const SCENARIO_CONFIGS = {
   [SCENARIO_COUNTDOWN_TO_START]: {
     position: 'right' as const,
-    colorClass: 'border border-blue-600/60 text-blue-400 hover:border-blue-500',
+    colorClass: 'border border-blue-600/60 text-blue-400',
     label: undefined, // Hide label for bookings
     hidePercentage: true, // Hide percentage for bookings
     shimmer: false,
   },
   [SCENARIO_OPEN_TIMER]: {
     position: 'left' as const,
-    colorClass: 'border border-green-600/60 text-green-400 hover:border-green-500',
+    colorClass: 'border border-green-600/60 text-green-400',
     label: 'Open time',
     hidePercentage: true,
     shimmer: true,
   },
   [SCENARIO_OVERDUE]: {
     position: 'left' as const,
-    colorClass: 'border border-red-600/60 text-red-400 hover:border-red-500',
+    colorClass: 'border border-red-600/60 text-red-400',
     label: 'Overdue',
     hidePercentage: false,
     shimmer: false,
   },
   [SCENARIO_COMPLETED]: {
     position: 'left' as const,
-    colorClass: 'border border-gray-600/60 text-gray-400 hover:border-gray-500',
+    colorClass: 'border border-gray-600/60 text-gray-400',
     label: 'Completed',
     hidePercentage: false,
     shimmer: false,
@@ -219,9 +219,9 @@ const SCENARIO_CONFIGS = {
 };
 
 // Pre-defined color classes for progress ranges - reuse strings
-const COLOR_GREEN = 'border border-green-600/60 text-green-400 hover:border-green-500';
-const COLOR_AMBER = 'border border-amber-600/60 text-amber-400 hover:border-amber-500';
-const COLOR_RED = 'border border-red-600/60 text-red-400 hover:border-red-500';
+const COLOR_GREEN = 'border border-green-600/60 text-green-400';
+const COLOR_AMBER = 'border border-amber-600/60 text-amber-400';
+const COLOR_RED = 'border border-red-600/60 text-red-400';
 
 // @ts-ignore
 const LiveTimer: Component<LiveTimerProps> = (props) => {
